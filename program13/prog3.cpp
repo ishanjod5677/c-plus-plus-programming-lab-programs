@@ -1,22 +1,33 @@
 #include <iostream>
-#include <thread>
-#include <mutex>
+#include <windows.h>
+
 using namespace std;
 
-long counter = 0;
-mutex m;
+int counter = 0;
+HANDLE mtx;
 
-void addSafe(int times) {
-    for (int i = 0; i < times; ++i) {
-        lock_guard<mutex> lk(m);   // locks here, unlocks at scope end
-        ++counter;                 // protected critical section
+DWORD WINAPI increment(LPVOID lpParam) {
+    for (int i = 0; i < 100000; i++) {
+        WaitForSingleObject(mtx, INFINITE); // Locks mutex
+        counter++;
+        ReleaseMutex(mtx);                  // Unlocks mutex
     }
+    return 0;
 }
 
 int main() {
-    thread t1(addSafe, 100000);    // two threads run in parallel
-    thread t2(addSafe, 100000);
-    t1.join(); t2.join();          // wait for both
-    cout << "counter = " << counter << " (expected 200000)\n";
+    mtx = CreateMutex(NULL, FALSE, NULL);
+
+    HANDLE t1 = CreateThread(NULL, 0, increment, NULL, 0, NULL);
+    HANDLE t2 = CreateThread(NULL, 0, increment, NULL, 0, NULL);
+
+    WaitForSingleObject(t1, INFINITE);
+    WaitForSingleObject(t2, INFINITE);
+
+    CloseHandle(t1);
+    CloseHandle(t2);
+    CloseHandle(mtx);
+
+    cout << "Final Counter = " << counter << endl;
     return 0;
 }
